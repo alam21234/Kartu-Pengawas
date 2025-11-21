@@ -1,21 +1,133 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Generator Kartu Pengawas</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8" />
+<title>Generate Kartu Pengawas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+body { font-family: Arial; padding: 20px; }
+#preview img { width: 180px; margin: 6px; border: 1px solid #aaa; }
+.button { padding: 10px 20px; background: #0066cc; color: #fff; border-radius: 6px; cursor: pointer; }
+</style>
 </head>
+
 <body>
-  <h1>Generator Kartu Pengawas A6</h1>
 
-  <input id="sheetUrl" placeholder="Masukkan URL CSV Google Sheets" style="width:60%">
-  <button onclick="loadSheet()">Load Jadwal</button>
-  <button onclick="generateAll()">Generate Semua Kartu (ZIP)</button>
+<h2>Generate Semua Kartu Pengawas (ZIP)</h2>
 
-  <div id="preview"></div>
+<button class="button" onclick="generateAll()">Generate Semua Kartu</button>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-  <script src="script.js"></script>
+<h3>Preview 6 Kartu Pertama:</h3>
+<div id="preview"></div>
+
+<script>
+const SHEET_URL = 
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vStwIDEQx4PflOeIxaBZunj0DdFxWP_0T-w9TLrVLm_XoPwHDPhKEHRYMUyl2PaUkq5q__yrENag5Xm/pub?gid=1434741519&single=true&output=csv";
+
+const LOGO_URL = "https://i.ibb.co.com/PZnyrPW/SMAN1-Cluring-emblem.png";
+const TOTAL_GURU = 44;
+
+async function generateAll() {
+    const csv = await fetch(SHEET_URL).then(r => r.text());
+    const rows = csv.split("\n").map(r => r.split(","));
+
+    const headers = rows[0];
+    const data = rows.slice(1);
+
+    const { jsPDF } = window.jspdf;
+    const zip = new JSZip();
+    const previewContainer = document.getElementById("preview");
+    previewContainer.innerHTML = "";
+
+    const logoBase = await toBase64(LOGO_URL);
+
+    for (let i = 1; i <= TOTAL_GURU; i++) {
+        const row = data[i - 1];
+
+        const nama = row[1] || "Guru " + i;
+        const hari = row[2] || "-";
+        const tanggal = row[3] || "-";
+        const waktu = row[4] || "-";
+        const ruang = row[5] || "-";
+
+        const uniqueQR = `PENGAWAS-${i}-${Date.now()}`;
+
+        /** Generate PDF A6 */
+        const pdf = new jsPDF({ format: "a6" });
+
+        // Background biru gradasi KTP
+        let g = pdf.setFillColor(80, 140, 220);
+        pdf.rect(0, 0, 300, 500, "F");
+
+        // Logo
+        pdf.addImage(logoBase, "PNG", 10, 10, 30, 30);
+
+        pdf.setFontSize(14);
+        pdf.text("KARTU PENGAWAS UJIAN", 50, 20);
+
+        pdf.setFontSize(11);
+        pdf.text(`Nama: ${nama}`, 10, 55);
+        pdf.text(`Hari: ${hari}`, 10, 65);
+        pdf.text(`Tanggal: ${tanggal}`, 10, 75);
+        pdf.text(`Waktu: ${waktu}`, 10, 85);
+        pdf.text(`Ruang: ${ruang}`, 10, 95);
+
+        // QR unik
+        const qrCanvas = await generateQR(uniqueQR);
+        const qrBase = qrCanvas.toDataURL("image/png");
+        pdf.addImage(qrBase, "PNG", 100, 60, 60, 60);
+
+        const fileName = `kartu_pengawas_${i}.pdf`;
+
+        // Add to ZIP
+        zip.file(fileName, pdf.output("arraybuffer"));
+
+        // Preview 6 kartu pertama
+        if (i <= 6) {
+            const img = document.createElement("img");
+            img.src = pdf.output("datauristring");
+            previewContainer.appendChild(img);
+        }
+    }
+
+    // Download ZIP
+    const content = await zip.generateAsync({ type: "blob" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(content);
+    a.download = "kartu_pengawas_all.zip";
+    a.click();
+}
+
+/** Convert image URL → Base64 */
+async function toBase64(url) {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+    });
+}
+
+/** Generate QR */
+function generateQR(text) {
+    return new Promise(resolve => {
+        const temp = document.createElement("div");
+        const qr = new QRCode(temp, { text, width: 200, height: 200 });
+        setTimeout(() => {
+            const img = temp.getElementsByTagName("img")[0];
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas);
+        }, 300);
+    });
+}
+</script>
+
 </body>
 </html>
