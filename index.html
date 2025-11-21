@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Generator Kartu Pengawas</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Generator Kartu Pengawas A6</h1>
+
+  <input id="sheetUrl" placeholder="Masukkan URL CSV Google Sheets" style="width:60%">
+  <button onclick="loadSheet()">Load Jadwal</button>
+  <button onclick="generateAll()">Generate Semua Kartu (ZIP)</button>
+
+  <div id="preview"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
