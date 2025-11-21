@@ -19,14 +19,14 @@
 <body>
 <div class="container">
   <h1>Generator Kartu Pengawas — A6 (Batch 44)</h1>
-  <p>Pastikan file logo berada di lokasi yang sama dengan file HTML: <code>/mnt/data/SMAN1Cluring-emblem.png</code> (file sudah ada).</p>
+  <p>Pastikan file logo berada di lokasi yang sama dengan file HTML: <code>SMAN1Cluring-emblem.png</code></p>
 
-  <label>Link CSV publik Google Sheets (atau biarkan default):</label>
+  <label>Link CSV publik Google Sheets:</label>
   <input id="csvUrl" type="text"
     value="https://docs.google.com/spreadsheets/d/e/2PACX-1vStwIDEQx4PflOeIxaBZunj0DdFxWP_0T-w9TLrVLm_XoPwHDPhKEHRYMUyl2PaUkq5q__yrENag5Xm/pub?gid=1434741519&single=true&output=csv" />
 
   <label>Logo path (relatif ke file HTML):</label>
-  <input id="logoPath" type="text" value="/mnt/data/SMAN1Cluring-emblem.png" />
+  <input id="logoPath" type="text" value="SMAN1Cluring-emblem.png" />
 
   <label>Opsi QR:</label>
   <select id="qrMode">
@@ -66,12 +66,11 @@ const supervisors = {
 41:"Yunita Firmaningtyas, S.Pd.",42:"Agus Winaryanto, S.Pd.H",43:"Wiyanto, S.Pd",44:"Silvi Maharani Hilda, S.Pd"
 };
 
-// helper CSV parser (handles quoted commas lightly)
+// helper CSV parser
 function parseCSV(text){
   const rows = [];
   const lines = text.split(/\r?\n/).filter(Boolean);
   for (let i=0;i<lines.length;i++){
-    // naive split with handling quotes
     const cols = [];
     let cur = '', inquote=false;
     for (let ch of lines[i]){
@@ -84,7 +83,7 @@ function parseCSV(text){
   return rows;
 }
 
-// Convert sheet rows to structured rows with R1..R28 columns
+// Convert rows
 function sheetRowsToObjects(rows){
   if (!rows || rows.length<1) return [];
   const header = rows[0].map(h => h.replace(/\uFEFF/g,'').trim());
@@ -99,25 +98,19 @@ function sheetRowsToObjects(rows){
   return data;
 }
 
-// Map schedule data to assignments per supervisor id
+// Map schedule
 function buildAssignments(data){
-  // columns: expect 'No','Hari/Tanggal','Waktu', then R1..R27 (or numeric columns)
-  const assignments = {}; // id -> [{hari,tanggal,waktu,roomPos}]
+  const assignments = {};
   data.forEach(r=>{
-    // handle variations: header might be "Hari/Tanggal" or "Hari" + "Tanggal"
-    const hariTanggal = r['Hari/Tanggal'] || r['Hari'] || r['HariTanggal'] || r['No'] || '';
-    const waktu = r['Waktu'] || r['Waktu '] || r['Waktu'] || '';
-    // Find columns that look like numbers or R1..R28
+    const hariTanggal = r['Hari/Tanggal'] || r['Hari'] || r['Tanggal'] || '';
+    const waktu = r['Waktu'] || '';
     Object.keys(r).forEach(k=>{
       const kk = k.trim();
-      if (kk === '' || ['No','Hari/Tanggal','Hari','Tanggal','Waktu','ISTIRAHAT','RUANG','Waktu'].includes(kk)) return;
-      // Accept R1..R99 or numeric column names "1","2",...
-      const isR = /^R?\d{1,2}$/.test(kk);
-      if (!isR) return;
+      if (['No','Hari/Tanggal','Hari','Tanggal','Waktu','ISTIRAHAT','RUANG'].includes(kk)) return;
+      if (!/^R?\d{1,2}$/.test(kk)) return;
       const val = r[k];
       if (!val) return;
       const id = String(val).trim();
-      if (!id) return;
       if (!assignments[id]) assignments[id] = [];
       assignments[id].push({
         hari: hariTanggal,
@@ -129,26 +122,21 @@ function buildAssignments(data){
   return assignments;
 }
 
-// Rendering & PDF generation
 const { jsPDF } = window.jspdf;
 
 function createCardImage({name,id,assignments, logoImg, qrDataURL}){
-  // create canvas for A6 at 300 DPI approx (we scale down for performance)
-  const mmToPx = mm => Math.round(mm * (96/25.4)); // use 96dpi canvas
-  const W = mmToPx(105); const H = mmToPx(148);
+  const mmToPx = mm => Math.round(mm * (96/25.4));
+  const W = mmToPx(105), H = mmToPx(148);
   const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx = cv.getContext('2d');
 
-  // background gradient-blue style KTP
   const g = ctx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,'#7fb9ff'); g.addColorStop(1,'#4b9be6');
   ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
 
-  // white card area inset
   ctx.fillStyle='rgba(255,255,255,0.06)';
   ctx.fillRect(10,10,W-20,H-20);
 
-  // logo (async image already loaded)
   if (logoImg){
     const lw = Math.min(80, W*0.2);
     ctx.drawImage(logoImg, W/2 - lw/2, 18, lw, lw);
@@ -161,7 +149,6 @@ function createCardImage({name,id,assignments, logoImg, qrDataURL}){
 
   ctx.textAlign = 'left';
   ctx.font = '14px Arial';
-  ctx.fillStyle='#012a4a';
   ctx.fillText('Nama: ' + name, 20, 150);
   ctx.fillText('ID: ' + id, 20, 170);
 
@@ -170,32 +157,27 @@ function createCardImage({name,id,assignments, logoImg, qrDataURL}){
   let y = 215;
   if (assignments && assignments.length){
     assignments.slice(0,8).forEach(a=>{
-      const t = `- ${a.hari} | ${a.waktu} | Pos ${a.roomPos}`;
-      ctx.fillText(t, 20, y); y += 16;
+      ctx.fillText(`- ${a.hari} | ${a.waktu} | Pos ${a.roomPos}`, 20, y);
+      y += 16;
     });
   } else {
-    ctx.fillText('- (tidak ada tugas terdaftar)', 20, y); y+=16;
+    ctx.fillText('- (tidak ada tugas terdaftar)', 20, y);
   }
 
-  // QR (use provided dataURL)
   if (qrDataURL){
-    const img = new Image();
-    img.src = qrDataURL;
-    // draw immediately if loaded, but likely not loaded yet; to keep sync we draw via onload below in caller
-    // here we place a placeholder white box
-    ctx.fillStyle='white'; ctx.fillRect(W - 110, H - 110, 90, 90);
+    ctx.fillStyle='white'; 
+    ctx.fillRect(W - 110, H - 110, 90, 90);
   }
 
   return cv;
 }
 
-// generate QR dataURL synchronously using QRious
 function makeQR(text, size=200){
   const qr = new QRious({value: text, size: size});
   return qr.toDataURL('image/png');
 }
 
-function loadImage(src){ // return Promise<HTMLImageElement>
+function loadImage(src){
   return new Promise((resolve)=>{
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -205,7 +187,6 @@ function loadImage(src){ // return Promise<HTMLImageElement>
   });
 }
 
-// main generate function
 document.getElementById('genBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('status');
   status.textContent = 'Mengunduh CSV dan memproses...';
@@ -220,46 +201,36 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
     const data = sheetRowsToObjects(rows);
     const assignments = buildAssignments(data);
 
-    // preload logo
     status.textContent = 'Memuat logo...';
     const logoImg = await loadImage(logoPath);
 
-    // prepare ZIP
     const zip = new JSZip();
-    const previewEl = document.getElementById('preview'); previewEl.innerHTML = '';
+    const previewEl = document.getElementById('preview'); 
+    previewEl.innerHTML = '';
 
-    // iterate supervisors 1..44 to ensure all created
     for (let id = 1; id <= 44; id++){
       const sid = String(id);
       const name = supervisors[id] || ('ID '+sid);
       const assign = assignments[sid] || [];
 
-      // QR content
       let qrText = '';
       if (qrMode === 'unique'){
-        // Generate compact text including id and first assignment
         qrText = `PENGAWAS|ID:${sid}|NAMA:${name}|`;
-        assign.forEach(a => qrText += `${a.hari} ${a.waktu} R${a.roomPos} ; `);
+        assign.forEach(a => qrText += `${a.hari} ${a.waktu} R${a.roomPos};`);
       } else if (qrMode==='form'){
-        // if you have Google Form, replace below link with your form + param
         qrText = 'https://forms.gle/REPLACE_WITH_YOUR_FORM?pengawas=' + encodeURIComponent(name);
-      } else {
-        qrText = '';
       }
 
       const qrDataURL = qrText ? makeQR(qrText, 220) : null;
 
-      // create canvas card
       const canvas = createCardImage({name, id: sid, assignments: assign, logoImg, qrDataURL});
 
-      // For correct QR drawing, overlay qr image (because createCardImage only reserved space)
       if (qrDataURL){
         const ctx = canvas.getContext('2d');
         const imgQR = await loadImage(qrDataURL);
         if (imgQR) ctx.drawImage(imgQR, canvas.width - 110, canvas.height - 110, 90, 90);
       }
 
-      // preview first 6
       if (id <= 6){
         const div = document.createElement('div'); div.className='cardPreview';
         const imgEl = new Image(); imgEl.src = canvas.toDataURL('image/png'); imgEl.style.width='100%';
@@ -267,25 +238,21 @@ document.getElementById('genBtn').addEventListener('click', async ()=>{
         previewEl.appendChild(div);
       }
 
-      // convert canvas to dataURL and add to jsPDF
       const imgData = canvas.toDataURL('image/png');
-      // create jspdf PDF A6 landscape? we want portrait A6: size in points
-      const pdf = new jsPDF({format:[105,148], unit:'mm'}); // pdf units mm
-      // Add image stretched to full page
+      const pdf = new jsPDF({format:[105,148], unit:'mm'});
       pdf.addImage(imgData, 'PNG', 0, 0, 105, 148);
       const pdfBlob = pdf.output('blob');
 
       zip.file(`kartu_${sid}_${name.replace(/[\\/:"*?<>|]/g,'_')}.pdf`, pdfBlob);
       status.textContent = `Membuat kartu ${id}/44 ...`;
-      await new Promise(r => setTimeout(r,10)); // give browser breathing room
+      await new Promise(r => setTimeout(r,10));
     }
 
     status.textContent = 'Mengemas ZIP...';
     const content = await zip.generateAsync({type:'blob'});
-    saveAs(content, 'kartu_pengawas_batch44_with_schedule.zip');
+    saveAs(content, 'kartu_pengawas_batch44.zip');
     status.textContent = 'Selesai — ZIP diunduh.';
   } catch (err) {
-    console.error(err);
     document.getElementById('status').textContent = 'Gagal: ' + (err.message || err);
   }
 });
