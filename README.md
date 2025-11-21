@@ -1,13 +1,8 @@
-# Generator Kartu Pengawas A6
+# Kartu Pengawas Generator
 
-## Fitur
-- Ambil jadwal langsung dari Google Sheets CSV
-- Generate 44 kartu pengawas otomatis
-- QR unik tiap kartu
-- ZIP otomatis
+Repo siap pakai.
 
 ## Cara Pakai
-1. Upload semua file ini ke GitHub
-2. Jalankan GitHub Pages
-3. Buka halaman, masukkan URL CSV
-4. Klik *Generate Semua Kartu*
+1. Buka index.html
+2. Masukkan URL Google Sheets
+3. Klik Generate
