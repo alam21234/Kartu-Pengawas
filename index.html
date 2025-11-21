@@ -1,133 +1,296 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="id">
 <head>
-<meta charset="UTF-8" />
-<title>Generate Kartu Pengawas</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Generator Kartu Pengawas (A6)</title>
 <style>
-body { font-family: Arial; padding: 20px; }
-#preview img { width: 180px; margin: 6px; border: 1px solid #aaa; }
-.button { padding: 10px 20px; background: #0066cc; color: #fff; border-radius: 6px; cursor: pointer; }
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:18px;background:#f3f4f6}
+  .container{max-width:980px;margin:0 auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
+  h1{margin:0 0 12px;font-size:20px}
+  label{display:block;margin-top:10px;font-weight:600}
+  input[type=text]{width:100%;padding:8px;border-radius:6px;border:1px solid #ccc}
+  button{margin-top:12px;padding:10px 14px;border:0;border-radius:8px;background:#0b7; color:#fff;cursor:pointer}
+  #status{margin-top:10px;color:#333}
+  .previewGrid{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+  .cardPreview{width:210px;height:148px;border-radius:6px;overflow:hidden;border:1px solid #ddd;background:#fff;padding:8px}
 </style>
 </head>
-
 <body>
+<div class="container">
+  <h1>Generator Kartu Pengawas — A6 (Batch 44)</h1>
+  <p>Pastikan file logo berada di lokasi yang sama dengan file HTML: <code>/mnt/data/SMAN1Cluring-emblem.png</code> (file sudah ada).</p>
 
-<h2>Generate Semua Kartu Pengawas (ZIP)</h2>
+  <label>Link CSV publik Google Sheets (atau biarkan default):</label>
+  <input id="csvUrl" type="text"
+    value="https://docs.google.com/spreadsheets/d/e/2PACX-1vStwIDEQx4PflOeIxaBZunj0DdFxWP_0T-w9TLrVLm_XoPwHDPhKEHRYMUyl2PaUkq5q__yrENag5Xm/pub?gid=1434741519&single=true&output=csv" />
 
-<button class="button" onclick="generateAll()">Generate Semua Kartu</button>
+  <label>Logo path (relatif ke file HTML):</label>
+  <input id="logoPath" type="text" value="/mnt/data/SMAN1Cluring-emblem.png" />
 
-<h3>Preview 6 Kartu Pertama:</h3>
-<div id="preview"></div>
+  <label>Opsi QR:</label>
+  <select id="qrMode">
+    <option value="unique">QR unik per pengawas (kode text)</option>
+    <option value="form">QR → Google Form (global)</option>
+    <option value="none">Tidak pakai QR</option>
+  </select>
+
+  <button id="genBtn">Generate Semua Kartu (ZIP)</button>
+  <div id="status"></div>
+
+  <h3>Preview (beberapa kartu)</h3>
+  <div id="preview" class="previewGrid"></div>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
 <script>
-const SHEET_URL = 
-"https://docs.google.com/spreadsheets/d/e/2PACX-1vStwIDEQx4PflOeIxaBZunj0DdFxWP_0T-w9TLrVLm_XoPwHDPhKEHRYMUyl2PaUkq5q__yrENag5Xm/pub?gid=1434741519&single=true&output=csv";
+(async function(){
 
-const LOGO_URL = "https://i.ibb.co.com/PZnyrPW/SMAN1-Cluring-emblem.png";
-const TOTAL_GURU = 44;
+// Supervisors mapping 1..44
+const supervisors = {
+1:"Moh. Arif Susiawan, S.Pd",2:"Drs. Makhrus",3:"Moh. Suharso, S.Pd",4:"Umiasih, S. Pd",
+5:"Dra. Subekti Rahayu",6:"Dra. Siti Rofiah",7:"Drs. Sumardami",8:"Drs. Misnan",
+9:"Drs. Bagus Dwi Suasono",10:"Agus Supriyadi, S.Pd",11:"Dra Sirkah Muawanah, S.Pd",12:"Lilik Istyowati, S.T",
+13:"Drs. Puji Rahayu",14:"Endry Ernaningtyas, S.Pd",15:"Dra. Sih Puspitaning",16:"Ali Muthohar, S.Pd",
+17:"Imam Afandi, S.Pd",18:"Drs. Suroso",19:"Drs. SY. Hadi",20:"Magiyono, M.Pd",
+21:"Mirza Prastyo, S.Pd",22:"Ritwan Junianto, S.Pd",23:"Rio Bagus Dirgantara, S.Pd",24:"Adha Q Muttawakillah, S.Pd",
+25:"Wirdah Pramita, S.Pd",26:"Titin Nursanti, S.Pd",27:"Cahya Mahardika, S.Pd",28:"Kristin Setiyowati, S.Kom",
+29:"Joko Irawan, S.Pd",30:"Dewi Ainur Rokhmah, S.Pd.I",31:"Imam Hadi Taufik H, S.Pd.I",32:"Shienda Setyawatie, S.Pd",
+33:"Dwi Indah Lestari, S.Pd",34:"Aris Riyanto, S.Pd",35:"Rini Asih, S.Pd",36:"Yuli Fitriani, S.E",
+37:"Muhammad As'adi, S.S.",38:"Tina Wahyu Lestari, S.Pd.",39:"Galih Kidung Wobowo, S.Sn.",40:"Andis Dwi Saputro, S.Sos.I",
+41:"Yunita Firmaningtyas, S.Pd.",42:"Agus Winaryanto, S.Pd.H",43:"Wiyanto, S.Pd",44:"Silvi Maharani Hilda, S.Pd"
+};
 
-async function generateAll() {
-    const csv = await fetch(SHEET_URL).then(r => r.text());
-    const rows = csv.split("\n").map(r => r.split(","));
+// helper CSV parser (handles quoted commas lightly)
+function parseCSV(text){
+  const rows = [];
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  for (let i=0;i<lines.length;i++){
+    // naive split with handling quotes
+    const cols = [];
+    let cur = '', inquote=false;
+    for (let ch of lines[i]){
+      if (ch === '"' ) { inquote = !inquote; continue; }
+      if (ch===',' && !inquote){ cols.push(cur); cur=''; } else cur+=ch;
+    }
+    cols.push(cur);
+    rows.push(cols.map(c=>c.trim()));
+  }
+  return rows;
+}
 
-    const headers = rows[0];
-    const data = rows.slice(1);
+// Convert sheet rows to structured rows with R1..R28 columns
+function sheetRowsToObjects(rows){
+  if (!rows || rows.length<1) return [];
+  const header = rows[0].map(h => h.replace(/\uFEFF/g,'').trim());
+  const data = [];
+  for (let i=1;i<rows.length;i++){
+    const row = {};
+    for (let j=0;j<header.length;j++){
+      row[ header[j] || ('C' + j) ] = rows[i][j] ?? '';
+    }
+    data.push(row);
+  }
+  return data;
+}
 
-    const { jsPDF } = window.jspdf;
+// Map schedule data to assignments per supervisor id
+function buildAssignments(data){
+  // columns: expect 'No','Hari/Tanggal','Waktu', then R1..R27 (or numeric columns)
+  const assignments = {}; // id -> [{hari,tanggal,waktu,roomPos}]
+  data.forEach(r=>{
+    // handle variations: header might be "Hari/Tanggal" or "Hari" + "Tanggal"
+    const hariTanggal = r['Hari/Tanggal'] || r['Hari'] || r['HariTanggal'] || r['No'] || '';
+    const waktu = r['Waktu'] || r['Waktu '] || r['Waktu'] || '';
+    // Find columns that look like numbers or R1..R28
+    Object.keys(r).forEach(k=>{
+      const kk = k.trim();
+      if (kk === '' || ['No','Hari/Tanggal','Hari','Tanggal','Waktu','ISTIRAHAT','RUANG','Waktu'].includes(kk)) return;
+      // Accept R1..R99 or numeric column names "1","2",...
+      const isR = /^R?\d{1,2}$/.test(kk);
+      if (!isR) return;
+      const val = r[k];
+      if (!val) return;
+      const id = String(val).trim();
+      if (!id) return;
+      if (!assignments[id]) assignments[id] = [];
+      assignments[id].push({
+        hari: hariTanggal,
+        waktu: waktu,
+        roomPos: kk.replace(/^R/,'')
+      });
+    });
+  });
+  return assignments;
+}
+
+// Rendering & PDF generation
+const { jsPDF } = window.jspdf;
+
+function createCardImage({name,id,assignments, logoImg, qrDataURL}){
+  // create canvas for A6 at 300 DPI approx (we scale down for performance)
+  const mmToPx = mm => Math.round(mm * (96/25.4)); // use 96dpi canvas
+  const W = mmToPx(105); const H = mmToPx(148);
+  const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx = cv.getContext('2d');
+
+  // background gradient-blue style KTP
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#7fb9ff'); g.addColorStop(1,'#4b9be6');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // white card area inset
+  ctx.fillStyle='rgba(255,255,255,0.06)';
+  ctx.fillRect(10,10,W-20,H-20);
+
+  // logo (async image already loaded)
+  if (logoImg){
+    const lw = Math.min(80, W*0.2);
+    ctx.drawImage(logoImg, W/2 - lw/2, 18, lw, lw);
+  }
+
+  ctx.fillStyle='#012a4a';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('KARTU PENGAWAS UJIAN', W/2, 120);
+
+  ctx.textAlign = 'left';
+  ctx.font = '14px Arial';
+  ctx.fillStyle='#012a4a';
+  ctx.fillText('Nama: ' + name, 20, 150);
+  ctx.fillText('ID: ' + id, 20, 170);
+
+  ctx.fillText('Jadwal:', 20, 195);
+  ctx.font = '12px Arial';
+  let y = 215;
+  if (assignments && assignments.length){
+    assignments.slice(0,8).forEach(a=>{
+      const t = `- ${a.hari} | ${a.waktu} | Pos ${a.roomPos}`;
+      ctx.fillText(t, 20, y); y += 16;
+    });
+  } else {
+    ctx.fillText('- (tidak ada tugas terdaftar)', 20, y); y+=16;
+  }
+
+  // QR (use provided dataURL)
+  if (qrDataURL){
+    const img = new Image();
+    img.src = qrDataURL;
+    // draw immediately if loaded, but likely not loaded yet; to keep sync we draw via onload below in caller
+    // here we place a placeholder white box
+    ctx.fillStyle='white'; ctx.fillRect(W - 110, H - 110, 90, 90);
+  }
+
+  return cv;
+}
+
+// generate QR dataURL synchronously using QRious
+function makeQR(text, size=200){
+  const qr = new QRious({value: text, size: size});
+  return qr.toDataURL('image/png');
+}
+
+function loadImage(src){ // return Promise<HTMLImageElement>
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>resolve(img);
+    img.onerror = ()=>resolve(null);
+    img.src = src;
+  });
+}
+
+// main generate function
+document.getElementById('genBtn').addEventListener('click', async ()=>{
+  const status = document.getElementById('status');
+  status.textContent = 'Mengunduh CSV dan memproses...';
+  const csvUrl = document.getElementById('csvUrl').value.trim();
+  const logoPath = document.getElementById('logoPath').value.trim();
+  const qrMode = document.getElementById('qrMode').value;
+
+  try {
+    const res = await fetch(csvUrl);
+    const txt = await res.text();
+    const rows = parseCSV(txt);
+    const data = sheetRowsToObjects(rows);
+    const assignments = buildAssignments(data);
+
+    // preload logo
+    status.textContent = 'Memuat logo...';
+    const logoImg = await loadImage(logoPath);
+
+    // prepare ZIP
     const zip = new JSZip();
-    const previewContainer = document.getElementById("preview");
-    previewContainer.innerHTML = "";
+    const previewEl = document.getElementById('preview'); previewEl.innerHTML = '';
 
-    const logoBase = await toBase64(LOGO_URL);
+    // iterate supervisors 1..44 to ensure all created
+    for (let id = 1; id <= 44; id++){
+      const sid = String(id);
+      const name = supervisors[id] || ('ID '+sid);
+      const assign = assignments[sid] || [];
 
-    for (let i = 1; i <= TOTAL_GURU; i++) {
-        const row = data[i - 1];
+      // QR content
+      let qrText = '';
+      if (qrMode === 'unique'){
+        // Generate compact text including id and first assignment
+        qrText = `PENGAWAS|ID:${sid}|NAMA:${name}|`;
+        assign.forEach(a => qrText += `${a.hari} ${a.waktu} R${a.roomPos} ; `);
+      } else if (qrMode==='form'){
+        // if you have Google Form, replace below link with your form + param
+        qrText = 'https://forms.gle/REPLACE_WITH_YOUR_FORM?pengawas=' + encodeURIComponent(name);
+      } else {
+        qrText = '';
+      }
 
-        const nama = row[1] || "Guru " + i;
-        const hari = row[2] || "-";
-        const tanggal = row[3] || "-";
-        const waktu = row[4] || "-";
-        const ruang = row[5] || "-";
+      const qrDataURL = qrText ? makeQR(qrText, 220) : null;
 
-        const uniqueQR = `PENGAWAS-${i}-${Date.now()}`;
+      // create canvas card
+      const canvas = createCardImage({name, id: sid, assignments: assign, logoImg, qrDataURL});
 
-        /** Generate PDF A6 */
-        const pdf = new jsPDF({ format: "a6" });
+      // For correct QR drawing, overlay qr image (because createCardImage only reserved space)
+      if (qrDataURL){
+        const ctx = canvas.getContext('2d');
+        const imgQR = await loadImage(qrDataURL);
+        if (imgQR) ctx.drawImage(imgQR, canvas.width - 110, canvas.height - 110, 90, 90);
+      }
 
-        // Background biru gradasi KTP
-        let g = pdf.setFillColor(80, 140, 220);
-        pdf.rect(0, 0, 300, 500, "F");
+      // preview first 6
+      if (id <= 6){
+        const div = document.createElement('div'); div.className='cardPreview';
+        const imgEl = new Image(); imgEl.src = canvas.toDataURL('image/png'); imgEl.style.width='100%';
+        div.appendChild(imgEl);
+        previewEl.appendChild(div);
+      }
 
-        // Logo
-        pdf.addImage(logoBase, "PNG", 10, 10, 30, 30);
+      // convert canvas to dataURL and add to jsPDF
+      const imgData = canvas.toDataURL('image/png');
+      // create jspdf PDF A6 landscape? we want portrait A6: size in points
+      const pdf = new jsPDF({format:[105,148], unit:'mm'}); // pdf units mm
+      // Add image stretched to full page
+      pdf.addImage(imgData, 'PNG', 0, 0, 105, 148);
+      const pdfBlob = pdf.output('blob');
 
-        pdf.setFontSize(14);
-        pdf.text("KARTU PENGAWAS UJIAN", 50, 20);
-
-        pdf.setFontSize(11);
-        pdf.text(`Nama: ${nama}`, 10, 55);
-        pdf.text(`Hari: ${hari}`, 10, 65);
-        pdf.text(`Tanggal: ${tanggal}`, 10, 75);
-        pdf.text(`Waktu: ${waktu}`, 10, 85);
-        pdf.text(`Ruang: ${ruang}`, 10, 95);
-
-        // QR unik
-        const qrCanvas = await generateQR(uniqueQR);
-        const qrBase = qrCanvas.toDataURL("image/png");
-        pdf.addImage(qrBase, "PNG", 100, 60, 60, 60);
-
-        const fileName = `kartu_pengawas_${i}.pdf`;
-
-        // Add to ZIP
-        zip.file(fileName, pdf.output("arraybuffer"));
-
-        // Preview 6 kartu pertama
-        if (i <= 6) {
-            const img = document.createElement("img");
-            img.src = pdf.output("datauristring");
-            previewContainer.appendChild(img);
-        }
+      zip.file(`kartu_${sid}_${name.replace(/[\\/:"*?<>|]/g,'_')}.pdf`, pdfBlob);
+      status.textContent = `Membuat kartu ${id}/44 ...`;
+      await new Promise(r => setTimeout(r,10)); // give browser breathing room
     }
 
-    // Download ZIP
-    const content = await zip.generateAsync({ type: "blob" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(content);
-    a.download = "kartu_pengawas_all.zip";
-    a.click();
-}
+    status.textContent = 'Mengemas ZIP...';
+    const content = await zip.generateAsync({type:'blob'});
+    saveAs(content, 'kartu_pengawas_batch44_with_schedule.zip');
+    status.textContent = 'Selesai — ZIP diunduh.';
+  } catch (err) {
+    console.error(err);
+    document.getElementById('status').textContent = 'Gagal: ' + (err.message || err);
+  }
+});
 
-/** Convert image URL → Base64 */
-async function toBase64(url) {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    return new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-    });
-}
-
-/** Generate QR */
-function generateQR(text) {
-    return new Promise(resolve => {
-        const temp = document.createElement("div");
-        const qr = new QRCode(temp, { text, width: 200, height: 200 });
-        setTimeout(() => {
-            const img = temp.getElementsByTagName("img")[0];
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas);
-        }, 300);
-    });
-}
+})();
 </script>
-
 </body>
 </html>
